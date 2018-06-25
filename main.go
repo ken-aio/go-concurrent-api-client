@@ -45,14 +45,45 @@ type (
 	}
 )
 
+const (
+	keyTitles    = "titles"
+	keyEpisodes  = "episodes"
+	keyAPIResult = "result"
+)
+
 func main() {
 	initApp()
 
-	const keyTitles = "titles"
-	const keyEpisodes = "episodes"
-	const keyAPIResult = "result"
-	doTitles := func(ctx floc.Context, ctrl floc.Control) error {
+	job := run.Sequence(
+		createTitlesFunc(),
+		run.Parallel(
+			createTitleDetailFunc(),
+			createEpisodesFunc(),
+		),
+		createDoMergeFunc(),
+	)
+	ctx := floc.NewContext()
+	ctrl := floc.NewControl(ctx)
+	ctx.AddValue(keyAPIResult, &APIResult{})
+
+	_, _, err := floc.RunWith(ctx, ctrl, job)
+	if err != nil {
+		panic(err)
+	}
+
+	result := ctx.Value(keyAPIResult).(*APIResult)
+	resp, err := json.Marshal(result)
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("resp = %+v\n", string(resp))
+}
+
+// createTitlesFunc is return func for request titles api
+func createTitlesFunc() floc.Job {
+	return func(ctx floc.Context, ctrl floc.Control) error {
 		log.Println("doTitles")
+		time.Sleep(500 * time.Millisecond)
 		titlesResp := reqTitles()
 		ctx.AddValue(keyTitles, titlesResp)
 		episodes := make([]*Episodes, len(titlesResp.Titles))
@@ -62,13 +93,18 @@ func main() {
 		ctx.AddValue(keyEpisodes, episodes)
 		return nil
 	}
-	doTitle := func(ctx floc.Context, ctrl floc.Control) error {
+}
+
+// createTitleDetailFunc is return func for request title api
+func createTitleDetailFunc() floc.Job {
+	return func(ctx floc.Context, ctrl floc.Control) error {
 		titles := ctx.Value(keyTitles).(*Titles)
 		detailFuncs := make([]floc.Job, len(titles.Titles))
 		for i, t := range titles.Titles {
 			index, id := i, t.ID // *here[Point] same index and id if not set here
 			detailFuncs[index] = func(ctx floc.Context, ctrl floc.Control) error {
 				log.Println("doTitle detail", index, id)
+				time.Sleep(1500 * time.Millisecond)
 				titles.Titles[index] = *reqTitle(strconv.Itoa(id))
 				return nil
 			}
@@ -77,7 +113,11 @@ func main() {
 		_, _, err := floc.Run(job)
 		return err
 	}
-	doEpisodes := func(ctx floc.Context, ctrl floc.Control) error {
+}
+
+// createEpisodesFunc is return func for request episodes api
+func createEpisodesFunc() floc.Job {
+	return func(ctx floc.Context, ctrl floc.Control) error {
 		log.Println("doEpisodes")
 		episodes := ctx.Value(keyEpisodes).([]*Episodes)
 		detailFuncs := make([]floc.Job, len(episodes))
@@ -85,6 +125,7 @@ func main() {
 			index, titleID := i, e.TitleID // *here[Point] same index and id if not set here
 			detailFuncs[index] = func(ctx floc.Context, ctrl floc.Control) error {
 				log.Println("doEpisodes", index, titleID)
+				time.Sleep(1500 * time.Millisecond)
 				episodes[index].Episodes = reqEpisodes(strconv.Itoa(titleID)).Episodes
 				err := runEpisodeDetails(titleID, episodes[index])
 				return err
@@ -94,7 +135,10 @@ func main() {
 		_, _, err := floc.Run(job)
 		return err
 	}
-	doMerge := func(ctx floc.Context, ctrl floc.Control) error {
+}
+
+func createDoMergeFunc() floc.Job {
+	return func(ctx floc.Context, ctrl floc.Control) error {
 		titles := ctx.Value(keyTitles).(*Titles)
 		episodes := ctx.Value(keyEpisodes).([]*Episodes)
 		result := ctx.Value(keyAPIResult).(*APIResult)
@@ -110,39 +154,6 @@ func main() {
 		fmt.Printf("result = %+v\n", result)
 		return nil
 	}
-
-	job := run.Sequence(
-		doTitles,
-		run.Parallel(
-			doTitle,
-			doEpisodes,
-		),
-		doMerge,
-	)
-	ctx := floc.NewContext()
-	ctrl := floc.NewControl(ctx)
-	ctx.AddValue(keyAPIResult, &APIResult{})
-
-	_, _, err := floc.RunWith(ctx, ctrl, job)
-	if err != nil {
-		panic(err)
-	}
-	titles := ctx.Value(keyTitles).(*Titles)
-	episodes := ctx.Value(keyEpisodes).([]*Episodes)
-	log.Printf("titles = %+v / %+v\n", titles, episodes)
-	for _, es := range episodes {
-		log.Printf("es = %+v\n", es)
-		for _, e := range es.Episodes {
-			log.Printf("e = %+v\n", e)
-		}
-	}
-
-	result := ctx.Value(keyAPIResult).(*APIResult)
-	resp, err := json.Marshal(result)
-	if err != nil {
-		panic(err)
-	}
-	log.Printf("resp = %+v\n", string(resp))
 }
 
 func runEpisodeDetails(titleID int, es *Episodes) error {
@@ -151,6 +162,7 @@ func runEpisodeDetails(titleID int, es *Episodes) error {
 		index, episodeID := i, e.ID // *here[Point] same index and id if not set here
 		detailFuncs[index] = func(ctx floc.Context, ctrl floc.Control) error {
 			log.Println("doEpisodeDetail ", index, titleID, episodeID)
+			time.Sleep(1500 * time.Millisecond)
 			es.Episodes[index] = reqEpisode(strconv.Itoa(titleID), strconv.Itoa(episodeID))
 			return nil
 		}
