@@ -1,8 +1,8 @@
 # go-concurrent-api-client
-Golangを使って並列にAPIリクエストを行うサンプル実装  
+Sample for conccurent api request using golang.  
 
 # Library
-以下のライブラリを使っています  
+Using below libraries.  
   
 * go-floc
 https://github.com/workanator/go-floc
