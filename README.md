@@ -9,6 +9,14 @@ https://github.com/workanator/go-floc
   
 * resty
 https://github.com/go-resty/resty
+  
+# How to use
+```
+$ make run-mock
+...
+$ make deps
+$ make run
+```
 
 # run mock api server
 ```

@@ -37,7 +37,7 @@ type (
 	}
 	// Titles titles
 	Titles struct {
-		Titles []Title `json:"titles"`
+		Titles []*Title `json:"titles"`
 	}
 	// APIResult api result
 	APIResult struct {
@@ -84,7 +84,10 @@ func createTitlesFunc() floc.Job {
 	return func(ctx floc.Context, ctrl floc.Control) error {
 		log.Println("doTitles")
 		time.Sleep(500 * time.Millisecond)
-		titlesResp := reqTitles()
+		titlesResp, err := reqTitles()
+		if err != nil {
+			return err
+		}
 		ctx.AddValue(keyTitles, titlesResp)
 		episodes := make([]*Episodes, len(titlesResp.Titles))
 		for i, t := range titlesResp.Titles {
@@ -105,7 +108,11 @@ func createTitleDetailFunc() floc.Job {
 			detailFuncs[index] = func(ctx floc.Context, ctrl floc.Control) error {
 				log.Println("doTitle detail", index, id)
 				time.Sleep(1500 * time.Millisecond)
-				titles.Titles[index] = *reqTitle(strconv.Itoa(id))
+				var err error
+				titles.Titles[index], err = reqTitle(strconv.Itoa(id))
+				if err != nil {
+					return err
+				}
 				return nil
 			}
 		}
@@ -126,8 +133,12 @@ func createEpisodesFunc() floc.Job {
 			detailFuncs[index] = func(ctx floc.Context, ctrl floc.Control) error {
 				log.Println("doEpisodes", index, titleID)
 				time.Sleep(1500 * time.Millisecond)
-				episodes[index].Episodes = reqEpisodes(strconv.Itoa(titleID)).Episodes
-				err := runEpisodeDetails(titleID, episodes[index])
+				resp, err := reqEpisodes(strconv.Itoa(titleID))
+				if err != nil {
+					return err
+				}
+				episodes[index].Episodes = resp.Episodes
+				err = runEpisodeDetails(titleID, episodes[index])
 				return err
 			}
 		}
@@ -163,8 +174,9 @@ func runEpisodeDetails(titleID int, es *Episodes) error {
 		detailFuncs[index] = func(ctx floc.Context, ctrl floc.Control) error {
 			log.Println("doEpisodeDetail ", index, titleID, episodeID)
 			time.Sleep(1500 * time.Millisecond)
-			es.Episodes[index] = reqEpisode(strconv.Itoa(titleID), strconv.Itoa(episodeID))
-			return nil
+			var err error
+			es.Episodes[index], err = reqEpisode(strconv.Itoa(titleID), strconv.Itoa(episodeID))
+			return err
 		}
 	}
 	job := run.Parallel(detailFuncs...)
@@ -178,37 +190,35 @@ func initApp() {
 	resty.SetTimeout(1 * time.Second)
 }
 
-func doGet(url string, result interface{}) {
+func doGet(url string, result interface{}) error {
 	_, err := resty.R().SetResult(result).Get(url)
-	if err != nil {
-		panic(err)
-	}
+	return err
 }
 
-func reqTitles() *Titles {
+func reqTitles() (*Titles, error) {
 	url := apiBase + "/titles"
 	titles := &Titles{}
-	doGet(url, titles)
-	return titles
+	err := doGet(url, titles)
+	return titles, err
 }
 
-func reqTitle(id string) *Title {
+func reqTitle(id string) (*Title, error) {
 	url := apiBase + "/titles/" + id
 	title := &Title{}
-	doGet(url, title)
-	return title
+	err := doGet(url, title)
+	return title, err
 }
 
-func reqEpisodes(titleID string) *Episodes {
+func reqEpisodes(titleID string) (*Episodes, error) {
 	url := apiBase + "/titles/" + titleID + "/episodes"
 	episodes := &Episodes{}
-	doGet(url, episodes)
-	return episodes
+	err := doGet(url, episodes)
+	return episodes, err
 }
 
-func reqEpisode(titleID, episodeID string) *Episode {
+func reqEpisode(titleID, episodeID string) (*Episode, error) {
 	url := apiBase + "/titles/" + titleID + "/episodes/" + episodeID
 	episode := &Episode{}
-	doGet(url, episode)
-	return episode
+	err := doGet(url, episode)
+	return episode, err
 }

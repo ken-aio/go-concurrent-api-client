@@ -15,6 +15,7 @@ func main() {
 		f := "titles.json"
 		log(c, f)
 		return c.JSONBlob(http.StatusOK, read(f))
+		//return c.JSONBlob(http.StatusInternalServerError, read(f))
 	})
 	e.GET("/api/titles/:id", func(c echo.Context) error {
 		id := c.Param("id")

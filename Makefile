@@ -28,6 +28,10 @@ deps: dep
 update-deps: dep
 	dep ensure -update -v
 
+.PHONY: run
+run:
+	go run main.go
+
 .PHONY: run-mock
 run-mock: dep
 ifeq ($(shell command -v gin 2> /dev/null),)
